@@ -5,7 +5,7 @@
   "main": "server/api-server.js",
   "scripts": {
     "start": "node server/api-server.js",
-    "build": "npm install"
+    "build": "npm install && mkdir -p dist"
   },
   "dependencies": {
     "cors": "^2.8.5",
