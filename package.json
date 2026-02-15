@@ -1,0 +1,14 @@
+{
+  "name": "indikrea-api",
+  "version": "1.0.0",
+  "type": "module",
+  "main": "server/api-server.js",
+  "scripts": {
+    "start": "node server/api-server.js"
+  },
+  "dependencies": {
+    "cors": "^2.8.5",
+    "express": "^5.2.1",
+    "mysql2": "^3.17.1"
+  }
+}
