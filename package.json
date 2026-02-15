@@ -4,7 +4,8 @@
   "type": "module",
   "main": "server/api-server.js",
   "scripts": {
-    "start": "node server/api-server.js"
+    "start": "node server/api-server.js",
+    "build": "echo \"no build step\""
   },
   "dependencies": {
     "cors": "^2.8.5",
