@@ -1,4 +1,6 @@
 import mysql from 'mysql2/promise';
+import bcrypt from 'bcryptjs';
+import crypto from 'crypto';
 
 const host = process.env.OP_DB_HOST;
 const user = process.env.OP_DB_USER;
@@ -21,7 +23,53 @@ export async function handleGetData(req, res, payload) {
   const pool = await ensureDb();
   const action = payload.action;
 
-  if (action === 'get_public_data') {
+  if (action === 'login') {
+    try {
+      const body = payload.payload || payload;
+      const username = body?.username;
+      const plainPassword = body?.password;
+      if (!username || !plainPassword) {
+        return json(res, 400, { success: false, message: 'Username dan password wajib diisi.' });
+      }
+      const usersRes = await pool.query('SELECT * FROM users WHERE username = ? LIMIT 1', [username]);
+      const rows = usersRes?.[0] || [];
+      if (!rows.length) {
+        return json(res, 401, { success: false, message: 'Username atau password salah.' });
+      }
+      const row = rows[0];
+      const storedPassword = row.password || row.pass || '';
+      let isMatch = false;
+      if (storedPassword) {
+        if (storedPassword.startsWith('$2a$') || storedPassword.startsWith('$2b$') || storedPassword.startsWith('$2y$')) {
+          try {
+            isMatch = await bcrypt.compare(plainPassword, storedPassword);
+          } catch (e) {
+            isMatch = false;
+          }
+        } else if (/^[a-f0-9]{32}$/i.test(storedPassword)) {
+          const md5 = crypto.createHash('md5').update(plainPassword).digest('hex');
+          isMatch = md5 === storedPassword;
+        } else {
+          isMatch = storedPassword === plainPassword;
+        }
+      }
+      if (!isMatch) {
+        return json(res, 401, { success: false, message: 'Username atau password salah.' });
+      }
+      const userObj = {
+        id: row.id,
+        username: row.username,
+        email: row.email,
+        role: row.role,
+        status: row.status,
+        clientId: row.clientId || row.client_id || null
+      };
+      return json(res, 200, { success: true, user: userObj });
+    } catch (e) {
+      console.error('Error during login:', e);
+      return json(res, 500, { success: false, message: 'Terjadi kesalahan saat login.' });
+    }
+  } else if (action === 'get_public_data') {
     let settingsObj = {};
     try {
       const colsRes = await pool.query("SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'site_settings'");
