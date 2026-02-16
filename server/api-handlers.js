@@ -316,7 +316,67 @@ export async function handleUpdateData(req, res, payload) {
     return json(res, 403, { success: false, message: 'Permission denied.' });
   }
 
-  if (action === 'update_site_settings') {
+  if (action === 'update_client') {
+    if (!['superadmin','admin'].includes(role)) {
+      return json(res, 403, { success: false, message: 'Only admin/superadmin can update clients.' });
+    }
+    try {
+      const clientColsRes = await pool.query(
+        "SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'clients'"
+      );
+      const clientCols = (clientColsRes?.[0] || []).map((r) => String(r.COLUMN_NAME));
+      const colId = clientCols.includes('id') ? 'id' : clientCols[0];
+      const colName =
+        clientCols.includes('name') ? 'name' :
+        clientCols.includes('full_name') ? 'full_name' :
+        null;
+      const colEmail =
+        clientCols.includes('email') ? 'email' :
+        null;
+      const colPhone =
+        clientCols.includes('phone') ? 'phone' :
+        clientCols.includes('phone_number') ? 'phone_number' :
+        null;
+      const colStatus =
+        clientCols.includes('status') ? 'status' :
+        null;
+
+      const id = data.id;
+      if (!id) {
+        return json(res, 400, { success: false, message: 'Client id is required.' });
+      }
+
+      const sets = [];
+      const params = [];
+      if (colName && typeof data.name !== 'undefined') {
+        sets.push(`\`${colName}\` = ?`);
+        params.push(String(data.name || ''));
+      }
+      if (colEmail && typeof data.email !== 'undefined') {
+        sets.push(`\`${colEmail}\` = ?`);
+        params.push(String(data.email || ''));
+      }
+      if (colPhone && typeof data.phone !== 'undefined') {
+        sets.push(`\`${colPhone}\` = ?`);
+        params.push(String(data.phone || ''));
+      }
+      if (colStatus && typeof data.status !== 'undefined') {
+        sets.push(`\`${colStatus}\` = ?`);
+        params.push(String(data.status || 'Active'));
+      }
+      if (!sets.length) {
+        return json(res, 400, { success: false, message: 'No updatable fields provided.' });
+      }
+      params.push(id);
+      const sql = `UPDATE clients SET ${sets.join(', ')} WHERE \`${colId}\` = ? LIMIT 1`;
+      await pool.query(sql, params);
+
+      return json(res, 200, { success: true });
+    } catch (e) {
+      console.error('Error updating client:', e);
+      return json(res, 500, { success: false, message: 'Database error while updating client.' });
+    }
+  } else if (action === 'update_site_settings') {
     if (role !== 'superadmin') {
       return json(res, 403, { success: false, message: 'Only superadmin can update site settings.' });
     }
@@ -388,7 +448,137 @@ export async function handleUpdateData(req, res, payload) {
       console.error('Error updating site settings:', e);
       return json(res, 500, { success: false, message: 'Database error while updating site settings.' });
     }
-  }
+  } else if (action === 'update_user') {
+    if (role !== 'superadmin') {
+      return json(res, 403, { success: false, message: 'Only superadmin can update users.' });
+    }
+    try {
+      const userColsRes = await pool.query(
+        "SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'users'"
+      );
+      const userCols = (userColsRes?.[0] || []).map((r) => String(r.COLUMN_NAME));
+      const colId = userCols.includes('id') ? 'id' : userCols[0];
+      const colName =
+        userCols.includes('name') ? 'name' :
+        userCols.includes('full_name') ? 'full_name' :
+        userCols.includes('fullName') ? 'fullName' :
+        null;
+      const colEmail =
+        userCols.includes('email') ? 'email' :
+        userCols.includes('mail') ? 'mail' :
+        null;
+      const colRole =
+        userCols.includes('role') ? 'role' :
+        userCols.includes('user_role') ? 'user_role' :
+        null;
+      const colStatus =
+        userCols.includes('status') ? 'status' :
+        userCols.includes('user_status') ? 'user_status' :
+        null;
+      const colClientId =
+        userCols.includes('clientId') ? 'clientId' :
+        userCols.includes('client_id') ? 'client_id' :
+        null;
+
+      const id = data.id;
+      if (!id) {
+        return json(res, 400, { success: false, message: 'User id is required.' });
+      }
+
+      const sets = [];
+      const params = [];
+      if (colName && typeof data.name !== 'undefined') {
+        sets.push(`\`${colName}\` = ?`);
+        params.push(String(data.name || ''));
+      }
+      if (colEmail && typeof data.email !== 'undefined') {
+        sets.push(`\`${colEmail}\` = ?`);
+        params.push(String(data.email || ''));
+      }
+      if (colRole && typeof data.role !== 'undefined') {
+        sets.push(`\`${colRole}\` = ?`);
+        params.push(String(data.role || 'client'));
+      }
+      if (colStatus && typeof data.status !== 'undefined') {
+        sets.push(`\`${colStatus}\` = ?`);
+        params.push(String(data.status || 'Active'));
+      }
+      if (colClientId && typeof data.clientId !== 'undefined') {
+        sets.push(`\`${colClientId}\` = ?`);
+        params.push(data.clientId || null);
+      }
+
+      if (!sets.length) {
+        return json(res, 400, { success: false, message: 'No updatable fields provided.' });
+      }
+
+      params.push(id);
+      const sql = `UPDATE users SET ${sets.join(', ')} WHERE \`${colId}\` = ? LIMIT 1`;
+      await pool.query(sql, params);
+
+      return json(res, 200, { success: true });
+    } catch (e) {
+      console.error('Error updating user:', e);
+      return json(res, 500, { success: false, message: 'Database error while updating user.' });
+    }
+  } else if (action === 'update_website_usage') {
+    if (!['superadmin','admin'].includes(role)) {
+      return json(res, 403, { success: false, message: 'Only admin/superadmin can update website usage.' });
+    }
+    try {
+      const websiteColsRes = await pool.query(
+        "SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'websites'"
+      );
+      const websiteCols = (websiteColsRes?.[0] || []).map((r) => String(r.COLUMN_NAME));
+      const colId = websiteCols.includes('id') ? 'id' : websiteCols[0];
+      const colDiskUsage =
+        websiteCols.includes('disk_usage_mb') ? 'disk_usage_mb' :
+        websiteCols.includes('diskUsageMb') ? 'diskUsageMb' :
+        websiteCols.includes('disk_usage') ? 'disk_usage' :
+        null;
+      const colInodes =
+        websiteCols.includes('inodes') ? 'inodes' :
+        websiteCols.includes('inode_usage') ? 'inode_usage' :
+        null;
+      const colExpiry =
+        websiteCols.includes('expiry_date') ? 'expiry_date' :
+        websiteCols.includes('expiryDate') ? 'expiryDate' :
+        null;
+
+      const id = data.id;
+      if (!id) {
+        return json(res, 400, { success: false, message: 'Website id is required.' });
+      }
+
+      const sets = [];
+      const params = [];
+      if (colDiskUsage && typeof data.disk_usage_mb !== 'undefined') {
+        sets.push(`\`${colDiskUsage}\` = ?`);
+        params.push(data.disk_usage_mb || 0);
+      }
+      if (colInodes && typeof data.inodes !== 'undefined') {
+        sets.push(`\`${colInodes}\` = ?`);
+        params.push(data.inodes || 0);
+      }
+      if (colExpiry && typeof data.expiry_date !== 'undefined') {
+        sets.push(`\`${colExpiry}\` = ?`);
+        params.push(data.expiry_date || null);
+      }
+
+      if (!sets.length) {
+        return json(res, 400, { success: false, message: 'No updatable fields provided.' });
+      }
+
+      params.push(id);
+      const sql = `UPDATE websites SET ${sets.join(', ')} WHERE \`${colId}\` = ? LIMIT 1`;
+      await pool.query(sql, params);
+
+      return json(res, 200, { success: true });
+    } catch (e) {
+      console.error('Error updating website usage:', e);
+      return json(res, 500, { success: false, message: 'Database error while updating website usage.' });
+    }
+  }  
 
   return json(res, 400, { success: false, message: 'Invalid update action.' });
 }
