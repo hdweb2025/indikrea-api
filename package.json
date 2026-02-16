@@ -5,11 +5,12 @@
   "main": "server/api-server.js",
   "scripts": {
     "start": "node server/api-server.js",
-    "build": "npm install && mkdir -p dist"
+    "build": "node -e \"require('fs').mkdirSync('dist', { recursive: true })\""
   },
   "dependencies": {
     "cors": "^2.8.5",
     "express": "^5.2.1",
-    "mysql2": "^3.17.1"
+    "mysql2": "^3.17.1",
+    "bcryptjs": "^3.0.3"
   }
 }
