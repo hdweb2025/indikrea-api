@@ -173,7 +173,17 @@ export async function handleGetData(req, res, payload) {
             settings: settingsObj,
         };
         if (user.role === 'superadmin') {
-            const users = await pool.query("SELECT id, username, email, role, lastLogin, status FROM users ORDER BY id DESC");
+            const userColsRes = await pool.query("SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'users'");
+            const userCols = (userColsRes?.[0] || []).map((r) => String(r.COLUMN_NAME));
+            const colLastLogin =
+              userCols.includes('lastLogin') ? 'lastLogin' :
+              userCols.includes('last_login') ? 'last_login' :
+              userCols.includes('last_login_at') ? 'last_login_at' :
+              null;
+            let selectUser =
+              "id, username, email, role, status" +
+              (colLastLogin ? `, \`${colLastLogin}\` as lastLogin` : ", NULL as lastLogin");
+            const users = await pool.query(`SELECT ${selectUser} FROM users ORDER BY id DESC`);
             data.users = users[0];
         }
         return json(res, 200, { success: true, data });
