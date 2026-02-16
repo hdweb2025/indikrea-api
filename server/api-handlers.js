@@ -289,8 +289,13 @@ export async function handleGetData(req, res, payload) {
               userCols.includes('last_login') ? 'last_login' :
               userCols.includes('last_login_at') ? 'last_login_at' :
               null;
+            const colClientId =
+              userCols.includes('clientId') ? 'clientId' :
+              userCols.includes('client_id') ? 'client_id' :
+              null;
             let selectUser =
               "id, username, email, role, status" +
+              (colClientId ? `, \`${colClientId}\` as clientId` : ", NULL as clientId") +
               (colLastLogin ? `, \`${colLastLogin}\` as lastLogin` : ", NULL as lastLogin");
             const users = await pool.query(`SELECT ${selectUser} FROM users ORDER BY id DESC`);
             data.users = users[0];
