@@ -114,11 +114,24 @@ export async function handleGetData(req, res, payload) {
           clientCols.includes('nama') ? 'nama' :
           clientCols[0] || 'id';
 
+        const websiteColsRes = await pool.query("SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'websites'");
+        const websiteCols = (websiteColsRes?.[0] || []).map((r) => String(r.COLUMN_NAME));
+        const colWebsiteClientId =
+          websiteCols.includes('clientId') ? 'clientId' :
+          websiteCols.includes('client_id') ? 'client_id' :
+          websiteCols.includes('client') ? 'client' :
+          websiteCols[0] || 'id';
+        const colWebsitePackageId =
+          websiteCols.includes('packageId') ? 'packageId' :
+          websiteCols.includes('package_id') ? 'package_id' :
+          websiteCols.includes('hosting_package_id') ? 'hosting_package_id' :
+          websiteCols[0] || 'id';
+
         const websites = await pool.query(
           `SELECT w.*, c.\`${colClientName}\` as clientName, p.name as packageName
            FROM websites w
-           LEFT JOIN clients c ON w.clientId = c.id
-           LEFT JOIN hosting_packages p ON w.packageId = p.id
+           LEFT JOIN clients c ON w.\`${colWebsiteClientId}\` = c.id
+           LEFT JOIN hosting_packages p ON w.\`${colWebsitePackageId}\` = p.id
            ORDER BY w.id DESC`
         );
         const clients = await pool.query("SELECT * FROM clients ORDER BY id DESC");
