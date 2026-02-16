@@ -50,6 +50,52 @@ function normalizeHostingPackages(rows) {
   });
 }
 
+function parseDiskUsageToMb(val) {
+  if (val == null) return 0;
+  if (typeof val === 'number') {
+    if (!isNaN(val) && val >= 0) return val;
+    return 0;
+  }
+  let s = String(val).trim();
+  if (!s) return 0;
+  const match = s.match(/^([\d.,]+)\s*([A-Za-z]+)?$/);
+  if (!match) {
+    const num = parseFloat(s.replace(',', '.'));
+    return !isNaN(num) && num >= 0 ? num : 0;
+  }
+  const num = parseFloat(match[1].replace(',', '.'));
+  if (isNaN(num) || num < 0) return 0;
+  const unitRaw = (match[2] || 'MiB').toUpperCase();
+  if (unitRaw.startsWith('T')) return num * 1024 * 1024;
+  if (unitRaw.startsWith('G')) return num * 1024;
+  if (unitRaw.startsWith('K')) return num / 1024;
+  return num;
+}
+
+function normalizeWebsites(rows) {
+  return rows.map((row) => {
+    const diskVal = row.disk_usage_mb != null ? row.disk_usage_mb : (row.disk_usage != null ? row.disk_usage : null);
+    const disk_usage_mb = parseDiskUsageToMb(diskVal);
+    let inodes = row.inodes;
+    inodes = typeof inodes === 'number' ? inodes : parseInt(inodes, 10);
+    if (isNaN(inodes) || inodes < 0) inodes = 0;
+    let parentId = row.parentId;
+    if (parentId === '' || parentId == null) parentId = null;
+    else {
+      const pid = parseInt(parentId, 10);
+      parentId = isNaN(pid) ? null : pid;
+    }
+    const last_modified = row.last_modified || row.last_updated || row.lastUpdate || '';
+    return { 
+      ...row, 
+      disk_usage_mb, 
+      inodes, 
+      parentId,
+      last_modified 
+    };
+  });
+}
+
 export async function handleGetData(req, res, payload) {
   const pool = await ensureDb();
   const action = payload.action;
@@ -166,6 +212,17 @@ export async function handleGetData(req, res, payload) {
           websiteCols.includes('hostname') ? 'hostname' :
           websiteCols[0] || 'id';
 
+        const colDiskUsage = 
+          websiteCols.includes('disk_usage_mb') ? 'disk_usage_mb' :
+          websiteCols.includes('diskUsageMb') ? 'diskUsageMb' :
+          websiteCols.includes('disk_usage') ? 'disk_usage' :
+          'disk_usage_mb';
+
+        const colInodes = 
+          websiteCols.includes('inodes') ? 'inodes' :
+          websiteCols.includes('inode_usage') ? 'inode_usage' :
+          'inodes';
+
         const invoiceColsRes = await pool.query("SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'invoices'");
         const invoiceCols = (invoiceColsRes?.[0] || []).map((r) => String(r.COLUMN_NAME));
         const colInvoiceClientId =
@@ -180,7 +237,10 @@ export async function handleGetData(req, res, payload) {
           invoiceCols[0] || 'id';
 
         const websites = await pool.query(
-          `SELECT w.*, c.\`${colClientName}\` as clientName, p.name as packageName
+          `SELECT w.*, 
+           w.\`${colDiskUsage}\` as disk_usage,
+           w.\`${colInodes}\` as inodes,
+           c.\`${colClientName}\` as clientName, p.name as packageName
            FROM websites w
            LEFT JOIN clients c ON w.\`${colWebsiteClientId}\` = c.id
            LEFT JOIN hosting_packages p ON w.\`${colWebsitePackageId}\` = p.id
@@ -198,7 +258,7 @@ export async function handleGetData(req, res, payload) {
         const registrations = await pool.query("SELECT r.*, p.name as packageName FROM registrations r LEFT JOIN hosting_packages p ON r.packageId = p.id ORDER BY r.id DESC");
         let settingsObj = {};
         const data = {
-            websites: websites[0],
+            websites: normalizeWebsites(websites[0] || []),
             clients: clients[0],
             invoices: invoices[0],
             hostingPackages: normalizeHostingPackages(hostingPackagesRes?.[0] || []),
