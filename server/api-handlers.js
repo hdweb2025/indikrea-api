@@ -105,9 +105,30 @@ export async function handleGetData(req, res, payload) {
         return json(res, 401, { success: false, message: 'Authentication required.' });
     }
     try {
-        const websites = await pool.query("SELECT w.*, c.fullName as clientName, p.name as packageName FROM websites w LEFT JOIN clients c ON w.clientId = c.id LEFT JOIN hosting_packages p ON w.packageId = p.id ORDER BY w.id DESC");
+        const clientColsRes = await pool.query("SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'clients'");
+        const clientCols = (clientColsRes?.[0] || []).map((r) => String(r.COLUMN_NAME));
+        const colClientName =
+          clientCols.includes('fullName') ? 'fullName' :
+          clientCols.includes('full_name') ? 'full_name' :
+          clientCols.includes('name') ? 'name' :
+          clientCols.includes('nama') ? 'nama' :
+          clientCols[0] || 'id';
+
+        const websites = await pool.query(
+          `SELECT w.*, c.\`${colClientName}\` as clientName, p.name as packageName
+           FROM websites w
+           LEFT JOIN clients c ON w.clientId = c.id
+           LEFT JOIN hosting_packages p ON w.packageId = p.id
+           ORDER BY w.id DESC`
+        );
         const clients = await pool.query("SELECT * FROM clients ORDER BY id DESC");
-        const invoices = await pool.query("SELECT i.*, c.fullName as clientName, w.domain FROM invoices i LEFT JOIN clients c ON i.clientId = c.id LEFT JOIN websites w ON i.websiteId = w.id ORDER BY i.id DESC");
+        const invoices = await pool.query(
+          `SELECT i.*, c.\`${colClientName}\` as clientName, w.domain
+           FROM invoices i
+           LEFT JOIN clients c ON i.clientId = c.id
+           LEFT JOIN websites w ON i.websiteId = w.id
+           ORDER BY i.id DESC`
+        );
         const hostingPackages = await pool.query("SELECT * FROM hosting_packages ORDER BY monthly_price_idr ASC");
         const registrations = await pool.query("SELECT r.*, p.name as packageName FROM registrations r LEFT JOIN hosting_packages p ON r.packageId = p.id ORDER BY r.id DESC");
         let settingsObj = {};
