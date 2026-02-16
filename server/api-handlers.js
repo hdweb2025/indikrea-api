@@ -19,6 +19,37 @@ function json(res, status, data) {
   res.status(status).json(data);
 }
 
+function normalizeHostingPackages(rows) {
+  return rows.map((row) => {
+    let features = row.features;
+    if (Array.isArray(features)) {
+      return row;
+    }
+    let parsed = [];
+    if (typeof features === 'string') {
+      const trimmed = features.trim();
+      if (trimmed) {
+        if (trimmed.startsWith('[') || trimmed.startsWith('{')) {
+          try {
+            const jsonVal = JSON.parse(trimmed);
+            if (Array.isArray(jsonVal)) {
+              parsed = jsonVal.filter((v) => typeof v === 'string' && v.trim() !== '');
+            }
+          } catch (e) {
+          }
+        }
+        if (!parsed.length) {
+          parsed = trimmed
+            .split(/\r?\n|;|,/)
+            .map((s) => s.trim())
+            .filter((s) => s.length > 0);
+        }
+      }
+    }
+    return { ...row, features: parsed };
+  });
+}
+
 export async function handleGetData(req, res, payload) {
   const pool = await ensureDb();
   const action = payload.action;
@@ -93,8 +124,10 @@ export async function handleGetData(req, res, payload) {
           else { cursor[p] = cursor[p] || {}; cursor = cursor[p] }
         }
       }
-      const packages = await pool.query("SELECT * FROM hosting_packages");
-      return json(res, 200, { success: true, data: { settings: settingsObj, hostingPackages: packages[0] } });
+      const packages = await pool.query("SELECT * FROM hosting_packages ORDER BY monthly_price_idr ASC");
+      const packageRows = packages?.[0] || [];
+      const normalizedPackages = normalizeHostingPackages(packageRows);
+      return json(res, 200, { success: true, data: { settings: settingsObj, hostingPackages: normalizedPackages } });
     } catch (e) {
       console.error('Error fetching public data:', e);
       return json(res, 500, { success: false, message: 'Database error while fetching public data.' });
@@ -161,14 +194,14 @@ export async function handleGetData(req, res, payload) {
            LEFT JOIN websites w ON i.\`${colInvoiceWebsiteId}\` = w.id
            ORDER BY i.id DESC`
         );
-        const hostingPackages = await pool.query("SELECT * FROM hosting_packages ORDER BY monthly_price_idr ASC");
+        const hostingPackagesRes = await pool.query("SELECT * FROM hosting_packages ORDER BY monthly_price_idr ASC");
         const registrations = await pool.query("SELECT r.*, p.name as packageName FROM registrations r LEFT JOIN hosting_packages p ON r.packageId = p.id ORDER BY r.id DESC");
         let settingsObj = {};
         const data = {
             websites: websites[0],
             clients: clients[0],
             invoices: invoices[0],
-            hostingPackages: hostingPackages[0],
+            hostingPackages: normalizeHostingPackages(hostingPackagesRes?.[0] || []),
             registrations: registrations[0],
             settings: settingsObj,
         };
