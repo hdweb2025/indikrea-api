@@ -5,7 +5,7 @@
   "main": "server/api-server.js",
   "scripts": {
     "start": "node server/api-server.js",
-    "build": "echo \"no build step\""
+    "build": "node -e \"require('fs').mkdirSync('dist', { recursive: true })\""
   },
   "dependencies": {
     "cors": "^2.8.5",
