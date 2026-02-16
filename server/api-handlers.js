@@ -126,6 +126,25 @@ export async function handleGetData(req, res, payload) {
           websiteCols.includes('package_id') ? 'package_id' :
           websiteCols.includes('hosting_package_id') ? 'hosting_package_id' :
           websiteCols[0] || 'id';
+        const colWebsiteDomain =
+          websiteCols.includes('domain') ? 'domain' :
+          websiteCols.includes('domain_name') ? 'domain_name' :
+          websiteCols.includes('url') ? 'url' :
+          websiteCols.includes('hostname') ? 'hostname' :
+          websiteCols[0] || 'id';
+
+        const invoiceColsRes = await pool.query("SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'invoices'");
+        const invoiceCols = (invoiceColsRes?.[0] || []).map((r) => String(r.COLUMN_NAME));
+        const colInvoiceClientId =
+          invoiceCols.includes('clientId') ? 'clientId' :
+          invoiceCols.includes('client_id') ? 'client_id' :
+          invoiceCols.includes('client') ? 'client' :
+          invoiceCols[0] || 'id';
+        const colInvoiceWebsiteId =
+          invoiceCols.includes('websiteId') ? 'websiteId' :
+          invoiceCols.includes('website_id') ? 'website_id' :
+          invoiceCols.includes('site_id') ? 'site_id' :
+          invoiceCols[0] || 'id';
 
         const websites = await pool.query(
           `SELECT w.*, c.\`${colClientName}\` as clientName, p.name as packageName
@@ -136,10 +155,10 @@ export async function handleGetData(req, res, payload) {
         );
         const clients = await pool.query("SELECT * FROM clients ORDER BY id DESC");
         const invoices = await pool.query(
-          `SELECT i.*, c.\`${colClientName}\` as clientName, w.domain
+          `SELECT i.*, c.\`${colClientName}\` as clientName, w.\`${colWebsiteDomain}\` as domain
            FROM invoices i
-           LEFT JOIN clients c ON i.clientId = c.id
-           LEFT JOIN websites w ON i.websiteId = w.id
+           LEFT JOIN clients c ON i.\`${colInvoiceClientId}\` = c.id
+           LEFT JOIN websites w ON i.\`${colInvoiceWebsiteId}\` = w.id
            ORDER BY i.id DESC`
         );
         const hostingPackages = await pool.query("SELECT * FROM hosting_packages ORDER BY monthly_price_idr ASC");
