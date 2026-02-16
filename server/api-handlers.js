@@ -85,13 +85,21 @@ function normalizeWebsites(rows) {
       const pid = parseInt(parentId, 10);
       parentId = isNaN(pid) ? null : pid;
     }
+    let package_id = row.package_id;
+    if (package_id !== undefined && package_id !== null) {
+      const pid = typeof package_id === 'number' ? package_id : parseInt(package_id, 10);
+      package_id = isNaN(pid) ? null : pid;
+    } else {
+      package_id = null;
+    }
     const last_modified = row.last_modified || row.last_updated || row.lastUpdate || '';
     return { 
       ...row, 
       disk_usage_mb, 
       inodes, 
       parentId,
-      last_modified 
+      last_modified,
+      package_id 
     };
   });
 }
@@ -200,11 +208,15 @@ export async function handleGetData(req, res, payload) {
           websiteCols.includes('client_id') ? 'client_id' :
           websiteCols.includes('client') ? 'client' :
           websiteCols[0] || 'id';
-        const colWebsitePackageId =
-          websiteCols.includes('packageId') ? 'packageId' :
+        const hasWebsitePackageCol =
+          websiteCols.includes('packageId') ||
+          websiteCols.includes('package_id') ||
+          websiteCols.includes('hosting_package_id');
+        const colWebsitePackageId = !hasWebsitePackageCol ? null :
+          (websiteCols.includes('packageId') ? 'packageId' :
           websiteCols.includes('package_id') ? 'package_id' :
           websiteCols.includes('hosting_package_id') ? 'hosting_package_id' :
-          websiteCols[0] || 'id';
+          null);
         const colWebsiteDomain =
           websiteCols.includes('domain') ? 'domain' :
           websiteCols.includes('domain_name') ? 'domain_name' :
@@ -236,14 +248,18 @@ export async function handleGetData(req, res, payload) {
           invoiceCols.includes('site_id') ? 'site_id' :
           invoiceCols[0] || 'id';
 
-        const websites = await pool.query(
+        const selectWebsiteBase =
           `SELECT w.*, 
            w.\`${colDiskUsage}\` as disk_usage,
            w.\`${colInodes}\` as inodes,
-           c.\`${colClientName}\` as clientName, p.name as packageName
+           c.\`${colClientName}\` as clientName`;
+        const selectWebsitePackage = hasWebsitePackageCol && colWebsitePackageId
+          ? `, w.\`${colWebsitePackageId}\` as package_id`
+          : '';
+        const websites = await pool.query(
+          `${selectWebsiteBase}${selectWebsitePackage}
            FROM websites w
            LEFT JOIN clients c ON w.\`${colWebsiteClientId}\` = c.id
-           LEFT JOIN hosting_packages p ON w.\`${colWebsitePackageId}\` = p.id
            ORDER BY w.id DESC`
         );
         const clients = await pool.query("SELECT * FROM clients ORDER BY id DESC");
