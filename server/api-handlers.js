@@ -347,34 +347,58 @@ export async function handleUpdateData(req, res, payload) {
         null;
 
       const id = data.id;
-      if (!id) {
-        return json(res, 400, { success: false, message: 'Client id is required.' });
-      }
 
-      const sets = [];
-      const params = [];
-      if (colName && typeof data.name !== 'undefined') {
-        sets.push(`\`${colName}\` = ?`);
-        params.push(String(data.name || ''));
+      if (!id) {
+        const insertCols = [];
+        const insertParams = [];
+        if (colName) {
+          insertCols.push(`\`${colName}\``);
+          insertParams.push(String(data.name || ''));
+        }
+        if (colEmail) {
+          insertCols.push(`\`${colEmail}\``);
+          insertParams.push(String(data.email || ''));
+        }
+        if (colPhone) {
+          insertCols.push(`\`${colPhone}\``);
+          insertParams.push(String(data.phone || ''));
+        }
+        if (colStatus) {
+          insertCols.push(`\`${colStatus}\``);
+          insertParams.push(String(data.status || 'Active'));
+        }
+        if (!insertCols.length) {
+          return json(res, 400, { success: false, message: 'No fields provided to create client.' });
+        }
+        const placeholders = insertCols.map(() => '?').join(', ');
+        const sqlInsert = `INSERT INTO clients (${insertCols.join(', ')}) VALUES (${placeholders})`;
+        await pool.query(sqlInsert, insertParams);
+      } else {
+        const sets = [];
+        const params = [];
+        if (colName && typeof data.name !== 'undefined') {
+          sets.push(`\`${colName}\` = ?`);
+          params.push(String(data.name || ''));
+        }
+        if (colEmail && typeof data.email !== 'undefined') {
+          sets.push(`\`${colEmail}\` = ?`);
+          params.push(String(data.email || ''));
+        }
+        if (colPhone && typeof data.phone !== 'undefined') {
+          sets.push(`\`${colPhone}\` = ?`);
+          params.push(String(data.phone || ''));
+        }
+        if (colStatus && typeof data.status !== 'undefined') {
+          sets.push(`\`${colStatus}\` = ?`);
+          params.push(String(data.status || 'Active'));
+        }
+        if (!sets.length) {
+          return json(res, 400, { success: false, message: 'No updatable fields provided.' });
+        }
+        params.push(id);
+        const sql = `UPDATE clients SET ${sets.join(', ')} WHERE \`${colId}\` = ? LIMIT 1`;
+        await pool.query(sql, params);
       }
-      if (colEmail && typeof data.email !== 'undefined') {
-        sets.push(`\`${colEmail}\` = ?`);
-        params.push(String(data.email || ''));
-      }
-      if (colPhone && typeof data.phone !== 'undefined') {
-        sets.push(`\`${colPhone}\` = ?`);
-        params.push(String(data.phone || ''));
-      }
-      if (colStatus && typeof data.status !== 'undefined') {
-        sets.push(`\`${colStatus}\` = ?`);
-        params.push(String(data.status || 'Active'));
-      }
-      if (!sets.length) {
-        return json(res, 400, { success: false, message: 'No updatable fields provided.' });
-      }
-      params.push(id);
-      const sql = `UPDATE clients SET ${sets.join(', ')} WHERE \`${colId}\` = ? LIMIT 1`;
-      await pool.query(sql, params);
 
       return json(res, 200, { success: true });
     } catch (e) {
